@@ -1,42 +1,36 @@
-const { createClient } = require("@supabase/supabase-js");
-const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
+    return { statusCode: 405, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Method Not Allowed" }) };
   }
 
-  const { username, password } = JSON.parse(event.body || "{}");
+  let body;
+  try { body = JSON.parse(event.body || "{}"); } catch { body = {}; }
+
+  const { username, password } = body;
   if (!username || !password) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Missing credentials" }) };
+    return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Missing credentials" }) };
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
-  );
+  // Users are stored as environment variables:
+  // USER_DANIELLE=password123:sk-ant-apikey...
+  // USER_MOM=password456:sk-ant-apikey...
+  // Format: USERNAME (uppercased) → "password:apikey"
+  const envKey = "USER_" + username.toUpperCase().trim();
+  const envVal = process.env[envKey];
 
-  // Look up user
-  const { data: user, error } = await supabase
-    .from("users")
-    .select("id, username, password_hash, api_key")
-    .eq("username", username.toLowerCase().trim())
-    .single();
-
-  if (error || !user) {
-    return { statusCode: 401, body: JSON.stringify({ error: "Invalid username or password" }) };
+  if (!envVal) {
+    return { statusCode: 401, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Invalid username or password" }) };
   }
 
-  // Check password
-  const valid = await bcrypt.compare(password, user.password_hash);
-  if (!valid) {
-    return { statusCode: 401, body: JSON.stringify({ error: "Invalid username or password" }) };
+  const [storedPassword, apiKey] = envVal.split(":");
+  if (!storedPassword || password !== storedPassword) {
+    return { statusCode: 401, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Invalid username or password" }) };
   }
 
-  // Issue JWT (contains user id, NOT api key)
   const token = jwt.sign(
-    { sub: user.id, username: user.username },
+    { username: username.toLowerCase().trim(), apiKey },
     process.env.JWT_SECRET,
     { expiresIn: "30d" }
   );
@@ -44,6 +38,6 @@ exports.handler = async (event) => {
   return {
     statusCode: 200,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, username: user.username }),
+    body: JSON.stringify({ token, username: username.toLowerCase().trim() }),
   };
 };
