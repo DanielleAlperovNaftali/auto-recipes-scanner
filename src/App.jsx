@@ -364,19 +364,20 @@ export default function App() {
 
   // Validate session on mount
   useEffect(() => {
-    const check = async () => {
-      if (!session?.token) { setAuthChecked(true); return; }
-      try {
-        const res = await fetch("/.netlify/functions/me", {
-          headers: { Authorization: `Bearer ${session.token}` },
-          method: "POST",
-          body: "{}",
-        });
-        if (!res.ok) { ls.del(SESSION_KEY); setSession(null); }
-      } catch { /* offline, keep session */ }
-      setAuthChecked(true);
-    };
-    check();
+    if (!session?.token) { setAuthChecked(true); return; }
+    try {
+      // Node Buffer base64 → browser: replace url-safe chars and fix padding
+      const b64 = session.token.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+      const payload = JSON.parse(atob(b64 + pad));
+      if (!payload.exp || Date.now() > payload.exp) {
+        ls.del(SESSION_KEY); setSession(null);
+      }
+    } catch {
+      // Token unreadable — clear it so user can log in fresh
+      ls.del(SESSION_KEY); setSession(null);
+    }
+    setAuthChecked(true);
   }, []);
 
   if (!authChecked) {

@@ -1,4 +1,7 @@
 exports.handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, body: "" };
+  }
   const authHeader = event.headers.authorization || event.headers.Authorization || "";
   const token = authHeader.replace("Bearer ", "").trim();
   if (!token) {
