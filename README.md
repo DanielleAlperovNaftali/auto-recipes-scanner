@@ -100,3 +100,4 @@ my-recipes/
 # auto-recipes-scanner
 # auto-recipes-scanner
 # auto-recipes-scanner
+# auto-recipes-scanner
