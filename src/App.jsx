@@ -343,11 +343,39 @@ function EditCategoriesModal({ recipe, allCategories, onSave, onClose }) {
 }
 
 // ─────────────────────────────────────────────
-// Main App
+// ─────────────────────────────────────────────
+// Auth Shell — handles login/logout only
 // ─────────────────────────────────────────────
 export default function App() {
   const [session, setSession]         = useState(() => ls.get(SESSION_KEY, null));
   const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    if (!session?.token) { setAuthChecked(true); return; }
+    try {
+      const b64 = session.token.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+      const payload = JSON.parse(atob(b64 + pad));
+      if (!payload.exp || Date.now() > payload.exp) { ls.del(SESSION_KEY); setSession(null); }
+    } catch { ls.del(SESSION_KEY); setSession(null); }
+    setAuthChecked(true);
+  }, []);
+
+  if (!authChecked) return (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ fontSize: "3rem" }}>🍽️</div>
+    </div>
+  );
+
+  if (!session) return <LoginScreen onLogin={(s) => { ls.set(SESSION_KEY, s); setSession(s); }} />;
+
+  return <RecipeApp session={session} onLogout={() => { ls.del(SESSION_KEY); setSession(null); }} />;
+}
+
+// ─────────────────────────────────────────────
+// Recipe App — all hooks here, no early returns before hooks
+// ─────────────────────────────────────────────
+function RecipeApp({ session, onLogout }) {
   const [recipes, setRecipes]         = useState(loadSavedRecipes);
   const [selectedRecipe, setSelected] = useState(() => loadSavedRecipes()[0]);
   const [view, setView]               = useState("detail");
@@ -362,36 +390,6 @@ export default function App() {
   const [editCatFor, setEditCatFor]   = useState(null);
   const fileRef = useRef();
 
-  // Validate session on mount
-  useEffect(() => {
-    if (!session?.token) { setAuthChecked(true); return; }
-    try {
-      // Node Buffer base64 → browser: replace url-safe chars and fix padding
-      const b64 = session.token.replace(/-/g, "+").replace(/_/g, "/");
-      const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
-      const payload = JSON.parse(atob(b64 + pad));
-      if (!payload.exp || Date.now() > payload.exp) {
-        ls.del(SESSION_KEY); setSession(null);
-      }
-    } catch {
-      // Token unreadable — clear it so user can log in fresh
-      ls.del(SESSION_KEY); setSession(null);
-    }
-    setAuthChecked(true);
-  }, []);
-
-  if (!authChecked) {
-    return (
-      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: "3rem", animation: "spin 1s linear infinite" }}>🍽️</div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <LoginScreen onLogin={(s) => { ls.set(SESSION_KEY, s); setSession(s); }} />;
-  }
-
   const token = session.token;
   const allCategories = [...BUILTIN_CATEGORIES, ...customCats];
   const getCat  = (id) => allCategories.find(c => c.id === id) || allCategories[allCategories.length - 1];
@@ -400,7 +398,7 @@ export default function App() {
   const saveRecipes = (updated) => { setRecipes(updated); ls.set(STORAGE_KEY, updated.filter(r => !r.isDemo)); };
   const saveCustomCats = (cats) => { setCustomCats(cats); ls.set(CUSTOM_CAT_KEY, cats); };
 
-  const logout = () => { ls.del(SESSION_KEY); setSession(null); };
+
 
   const handleFile = useCallback(async (file) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -471,7 +469,7 @@ export default function App() {
   const UserBadge = () => (
     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
       <span style={{ color: "#aaa", fontSize: "0.85rem" }}>שלום, <strong style={{ color: "#f8b500" }}>{session.username}</strong></span>
-      <button onClick={logout} style={{ padding: "0.35rem 0.8rem", borderRadius: "50px", border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "#666", cursor: "pointer", fontSize: "0.8rem" }}>יציאה</button>
+      <button onClick={onLogout} style={{ padding: "0.35rem 0.8rem", borderRadius: "50px", border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "#666", cursor: "pointer", fontSize: "0.8rem" }}>יציאה</button>
     </div>
   );
 
