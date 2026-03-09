@@ -1,5 +1,3 @@
-const jwt = require("jsonwebtoken");
-
 exports.handler = async (event) => {
   const authHeader = event.headers.authorization || event.headers.Authorization || "";
   const token = authHeader.replace("Bearer ", "").trim();
@@ -7,7 +5,10 @@ exports.handler = async (event) => {
     return { statusCode: 401, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "No token" }) };
   }
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = JSON.parse(Buffer.from(token, "base64").toString("utf8"));
+    if (!payload.exp || Date.now() > payload.exp) {
+      return { statusCode: 401, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Expired" }) };
+    }
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: payload.username }) };
   } catch {
     return { statusCode: 401, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Invalid token" }) };
