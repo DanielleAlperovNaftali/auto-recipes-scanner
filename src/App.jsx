@@ -204,9 +204,9 @@ function CropModal({ imageBase64, imageType, onCrop, onSkip }) {
     return { x: (clientX - bounds.left) * scaleX, y: (clientY - bounds.top) * scaleY };
   };
 
-  const onDown  = e => { const p = toRatio(e); setDrag(true); setStart(p); setRect(null); };
-  const onMove  = e => { if (!drag || !start) return; const p = toRatio(e); setRect({ x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) }); };
-  const onUp    = ()  => setDrag(false);
+  const onDown  = e => { e.preventDefault(); const p = toRatio(e); setDrag(true); setStart(p); setRect(null); };
+  const onMove  = e => { e.preventDefault(); if (!drag || !start) return; const p = toRatio(e); setRect({ x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) }); };
+  const onUp    = e => { e.preventDefault(); setDrag(false); };
 
   const applyCrop = () => {
     if (!rect || rect.w < 10 || rect.h < 10) { onSkip(); return; }
@@ -220,19 +220,27 @@ function CropModal({ imageBase64, imageType, onCrop, onSkip }) {
   };
 
   return (
-    <Modal onClose={onSkip} wide>
-      <h2 style={{ color:"#f8b500", marginBottom:"0.5rem" }}>✂️ חתוך תמונה</h2>
-      <p style={{ color:"#888", fontSize:"0.85rem", marginBottom:"1rem" }}>גרור לבחירת אזור. לחץ "חתוך" לשמירה, או "דלג" להמשך ללא חיתוך.</p>
-      <img ref={imgRef} src={`data:${imageType};base64,${imageBase64}`} onLoad={() => setLoaded(true)} style={{ display:"none" }} alt="" />
-      <canvas ref={canvasRef}
-        onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}
-        onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
-        style={{ width:"100%", borderRadius:"12px", cursor:"crosshair", userSelect:"none", touchAction:"none", border:"1px solid rgba(255,255,255,0.1)" }} />
-      <div style={{ display:"flex", gap:"0.7rem", marginTop:"1rem" }}>
-        <button onClick={onSkip} style={{ flex:1, padding:"0.7rem", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.15)", background:"transparent", color:"#aaa", fontWeight:600, cursor:"pointer" }}>דלג</button>
-        <button onClick={applyCrop} disabled={!rect || rect.w < 10} style={{ flex:1, padding:"0.7rem", borderRadius:"12px", border:"none", background: rect&&rect.w>10?"linear-gradient(135deg,#f8b500,#ff9500)":"rgba(248,181,0,0.2)", color:"#1a1a2e", fontWeight:800, cursor: rect&&rect.w>10?"pointer":"not-allowed" }}>✂️ חתוך</button>
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.9)", zIndex:1000, display:"flex", flexDirection:"column" }}>
+      {/* Header — always visible */}
+      <div style={{ padding:"0.75rem 1rem", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:"1px solid rgba(255,255,255,0.1)", flexShrink:0 }}>
+        <button onClick={onSkip} style={{ background:"transparent", border:"1px solid rgba(255,255,255,0.2)", borderRadius:"10px", color:"#aaa", padding:"0.4rem 0.9rem", cursor:"pointer", fontWeight:600 }}>דלג</button>
+        <h2 style={{ color:"#f8b500", fontSize:"1rem", fontWeight:700 }}>✂️ חתוך תמונה</h2>
+        <button onClick={applyCrop} disabled={!rect || rect.w < 10}
+          style={{ background: rect&&rect.w>10?"linear-gradient(135deg,#f8b500,#ff9500)":"rgba(248,181,0,0.2)", border:"none", borderRadius:"10px", color:"#1a1a2e", padding:"0.4rem 0.9rem", cursor: rect&&rect.w>10?"pointer":"not-allowed", fontWeight:800 }}>
+          חתוך ✓
+        </button>
       </div>
-    </Modal>
+      {/* Hint */}
+      <p style={{ color:"#888", fontSize:"0.8rem", textAlign:"center", padding:"0.4rem", flexShrink:0 }}>גרור על התמונה לבחירת אזור</p>
+      {/* Scrollable canvas area */}
+      <div style={{ flex:1, overflow:"auto", padding:"0.5rem", display:"flex", alignItems:"flex-start", justifyContent:"center" }}>
+        <img ref={imgRef} src={`data:${imageType};base64,${imageBase64}`} onLoad={() => setLoaded(true)} style={{ display:"none" }} alt="" />
+        <canvas ref={canvasRef}
+          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}
+          onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+          style={{ maxWidth:"100%", borderRadius:"12px", cursor:"crosshair", userSelect:"none", touchAction:"none", border:"1px solid rgba(255,255,255,0.1)", display:"block" }} />
+      </div>
+    </div>
   );
 }
 
@@ -242,7 +250,16 @@ function ConfirmModal({ recipe, allCategories, onConfirm, onClose }) {
   const [selected, setSelected] = useState(recipe.categories || ["other"]);
   const [imgB64,   setImgB64]   = useState(recipe.imageBase64);
   const [imgType,  setImgType]  = useState(recipe.imageType);
-  const [cropping, setCropping] = useState(true); // show crop first
+  const [cropping, setCropping] = useState(true);
+  const altImgRef               = useRef();
+
+  const handleAltImage = async (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const b64 = await new Promise((res, rej) => {
+      const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file);
+    });
+    setImgB64(b64); setImgType(file.type); setCropping(true);
+  };
 
   if (cropping && imgB64) {
     return <CropModal imageBase64={imgB64} imageType={imgType}
@@ -266,9 +283,20 @@ function ConfirmModal({ recipe, allCategories, onConfirm, onClose }) {
         {selected.map(id => { const c = allCategories.find(x=>x.id===id); return c?`${c.emoji} ${c.label}`:id; }).join(", ")}
       </p>
 
-      {/* Cropped preview */}
-      {imgB64 && <img src={`data:${imgType};base64,${imgB64}`} alt="" style={{ width:"100%", borderRadius:"12px", marginBottom:"1rem", maxHeight:200, objectFit:"cover" }} />}
-      {imgB64 && <button onClick={() => setCropping(true)} style={{ width:"100%", padding:"0.5rem", borderRadius:"10px", border:"1px solid rgba(248,181,0,0.3)", background:"rgba(248,181,0,0.08)", color:"#f8b500", cursor:"pointer", fontSize:"0.85rem", marginBottom:"1rem" }}>✂️ חתוך תמונה מחדש</button>}
+      {/* Image preview + controls */}
+      {imgB64 && <img src={`data:${imgType};base64,${imgB64}`} alt="" style={{ width:"100%", borderRadius:"12px", marginBottom:"0.6rem", maxHeight:180, objectFit:"cover" }} />}
+      <div style={{ display:"flex", gap:"0.5rem", marginBottom:"1.2rem" }}>
+        {imgB64 && (
+          <button onClick={() => setCropping(true)} style={{ flex:1, padding:"0.5rem", borderRadius:"10px", border:"1px solid rgba(248,181,0,0.3)", background:"rgba(248,181,0,0.08)", color:"#f8b500", cursor:"pointer", fontSize:"0.82rem" }}>✂️ חתוך</button>
+        )}
+        <button onClick={() => altImgRef.current?.click()} style={{ flex:1, padding:"0.5rem", borderRadius:"10px", border:"1px solid rgba(96,165,250,0.3)", background:"rgba(96,165,250,0.08)", color:"#60A5FA", cursor:"pointer", fontSize:"0.82rem" }}>
+          🖼️ {imgB64 ? "החלף תמונה" : "הוסף תמונה"}
+        </button>
+        {imgB64 && (
+          <button onClick={() => { setImgB64(null); setImgType(null); }} style={{ padding:"0.5rem 0.7rem", borderRadius:"10px", border:"1px solid rgba(239,68,68,0.3)", background:"rgba(239,68,68,0.08)", color:"#EF4444", cursor:"pointer", fontSize:"0.82rem" }}>✕</button>
+        )}
+      </div>
+      <input ref={altImgRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e => handleAltImage(e.target.files[0])} />
 
       <button onClick={() => onConfirm(title.trim() || recipe.title, selected, imgB64, imgType)}
         style={{ width:"100%", padding:"0.85rem", borderRadius:"14px", border:"none", background:"linear-gradient(135deg,#f8b500,#ff9500)", color:"#1a1a2e", fontWeight:800, fontSize:"1rem", cursor:"pointer" }}>
