@@ -564,7 +564,7 @@ function RecipeApp({ session, onLogout }) {
     rc:   { background:"rgba(255,255,255,0.06)", backdropFilter:"blur(16px)", borderRadius:"16px", border:"1px solid rgba(255,255,255,0.1)", overflow:"hidden", cursor:"pointer", transition:"transform 0.2s,box-shadow 0.2s" },
   };
 
-  const FileInput = () => <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={e => handleFile(e.target.files[0])} />;
+  const FileInput = () => <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e => handleFile(e.target.files[0])} />;
 
   if (loading) return (
     <div style={{ minHeight:"100svh", background:"linear-gradient(135deg,#0f0c29,#302b63,#24243e)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"1rem", color:"#f8b500" }}>
